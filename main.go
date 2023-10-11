@@ -1,22 +1,30 @@
 package main
 
 import (
-	"web-server/database"
 	"web-server/model"
 
 	"github.com/gofiber/fiber/v2"
+	//"gorm.io/gorm/logger"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func routers(app *fiber.App) {
-	app.Get("/users", model.GetAllUsers)
-	app.Post("/user", model.AddUser)
+
+	//Auth Routes
+	app.Post("/auth/login", model.Login)
+	app.Post("/auth/signup", model.SignUp)
+
+	//User Routes
+	app.Get("/user", model.GetAllUsers)
 	app.Patch("/user/:id", model.UpdateUser)
 	// app.Delete("/user/:id", DeleteUser)
 }
 
 func main() {
-	database.InitMigration()
+	model.InitMigration()
 	app := fiber.New()
+
+	app.Use(logger.New())
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Welcome To My First Go Web Backend!!!")
