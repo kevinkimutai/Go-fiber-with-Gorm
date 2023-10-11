@@ -137,3 +137,22 @@ func Login(c *fiber.Ctx) error {
 	})
 
 }
+
+func Protected(c *fiber.Ctx) {
+	var token string
+	startsWith := "Bearer"
+	authHeader := c.Get("Authorization")
+
+	if authHeader != "" && strings.HasPrefix(authHeader, startsWith) {
+		// Split the Authorization Into Array
+		token = strings.Fields(authHeader)[1]
+
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Login To Continue",
+			"Error":   "Unauthorized",
+		})
+	}
+
+	c.Next()
+}
