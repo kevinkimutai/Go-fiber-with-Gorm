@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	//"gorm.io/gorm/logger"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	
 )
 
 func routers(app *fiber.App) {

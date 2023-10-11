@@ -1,10 +1,14 @@
 package model
 
 import (
-	"fmt"
+	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,7 +32,33 @@ func isDuplicateKeyError(err error) bool {
 	return strings.Contains(err.Error(), "duplicate key value violates unique constraint")
 }
 
-func createJWT() {}
+func createJWT(user *User) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":  user.ID,
+		"name": user.LastName,
+		"role": user.Role,
+		"exp":  time.Now().Add(time.Hour * 24).Unix(),
+		"iat":  time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	JWTSecretKey := os.Getenv("JWT_SECRET_KEY")
+
+	// Sign the token with the secret key
+	tokenString, err := token.SignedString([]byte(JWTSecretKey))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+
+}
 
 func SignUp(c *fiber.Ctx) error {
 	user := new(User)
@@ -85,8 +115,6 @@ func Login(c *fiber.Ctx) error {
 	//Compare passwords
 	matched := comparePasswords(loginUser.Password, user.Password)
 
-	fmt.Println("Matched", matched)
-
 	if !matched {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"message": "Unauthorized",
@@ -94,8 +122,18 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
+	//GENERATE JWT
+	jwt, err := createJWT(user)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Internal Error",
+			"error":   "Something went wrong when generating JWT token",
+		})
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message": "Login successful",
+		"token":   jwt,
 	})
 
 }
