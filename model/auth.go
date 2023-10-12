@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type loginRequest struct {
@@ -58,6 +61,42 @@ func createJWT(user *User) (string, error) {
 
 	return tokenString, nil
 
+}
+
+func verifyJWT(tokenString string) (jwt.MapClaims, error) {
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	JWTSecretKey := os.Getenv("JWT_SECRET_KEY")
+
+	key := []byte(JWTSecretKey)
+
+	// Parse and verify the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Verify the token using the key
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return key, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if the token is valid
+	if token.Valid {
+		// Access token claims
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			return claims, nil
+		}
+		return nil, fmt.Errorf("token claims are not valid")
+	} else {
+		return nil, fmt.Errorf("token is not valid")
+	}
 }
 
 func SignUp(c *fiber.Ctx) error {
@@ -138,10 +177,11 @@ func Login(c *fiber.Ctx) error {
 
 }
 
-func Protected(c *fiber.Ctx) {
+func Protected(c *fiber.Ctx) error {
 	var token string
 	startsWith := "Bearer"
 	authHeader := c.Get("Authorization")
+	user := new(User)
 
 	if authHeader != "" && strings.HasPrefix(authHeader, startsWith) {
 		// Split the Authorization Into Array
@@ -149,10 +189,60 @@ func Protected(c *fiber.Ctx) {
 
 	} else {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Login To Continue",
+			"message": "Missing Token,Login To Continue",
 			"Error":   "Unauthorized",
 		})
 	}
 
-	c.Next()
+	claims, err := verifyJWT(token)
+
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": "Wrong Token",
+			"Error":   "Unauthorized",
+		})
+	}
+
+	if err := DB.First(user, claims["sub"]).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Handle the case where the user with the given ID is not found
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"message": "User not found with that token",
+				"error":   "Unauthorized",
+			})
+		}
+		// Handle other database errors
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Internal Server Error",
+			"error":   err.Error(),
+		})
+	}
+
+	c.Locals("userRole", claims["role"])
+
+	return c.Next()
+
+}
+
+func Restricted(allowedRoles ...string) func(*fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		userRole := c.Locals("userRole")
+
+		// Check if the user's role is in the allowedRoles slice.
+		allowed := false
+
+		for _, role := range allowedRoles {
+			if userRole == role {
+				allowed = true
+				break
+			}
+		}
+
+		// If the user's role is not in the allowedRoles slice, return a Forbidden response.
+		if !allowed {
+			return c.Status(fiber.StatusForbidden).SendString("Forbidden, Login with proper rights")
+		}
+
+		return c.Next()
+	}
 }

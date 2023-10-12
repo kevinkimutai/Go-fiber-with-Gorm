@@ -6,7 +6,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	//"gorm.io/gorm/logger"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	
 )
 
 func routers(app *fiber.App) {
@@ -16,7 +15,7 @@ func routers(app *fiber.App) {
 	app.Post("/auth/signup", model.SignUp)
 
 	//User Routes
-	app.Get("/user", model.GetAllUsers)
+	app.Get("/user", model.Protected, model.Restricted("admin"), model.GetAllUsers)
 	app.Patch("/user/:id", model.UpdateUser)
 	// app.Delete("/user/:id", DeleteUser)
 }

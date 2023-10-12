@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -17,6 +18,7 @@ type User struct {
 }
 
 func GetAllUsers(c *fiber.Ctx) error {
+	fmt.Println(c.Locals("claims"))
 	users := new([]User)
 
 	//GET ALL USERS
